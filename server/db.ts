@@ -24,9 +24,8 @@ export async function migrate(){
     waba_id text,
     department text,
     mode text not null default 'hybrid',
-    health_score int not null default 100,
+    health_score int not null default 100 check(health_score between 0 and 100),
     status text not null default 'setup',
-    access_token_encrypted text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
   );
@@ -55,8 +54,7 @@ export async function migrate(){
     ai_mode text not null default 'hybrid',
     assigned_operator text,
     last_message_at timestamptz not null default now(),
-    created_at timestamptz not null default now(),
-    unique(customer_id, whatsapp_account_id, status)
+    created_at timestamptz not null default now()
   );
 
   create table if not exists messages(
@@ -84,7 +82,8 @@ export async function migrate(){
 
   create index if not exists idx_customers_assigned_whatsapp on customers(assigned_whatsapp_id);
   create index if not exists idx_conversations_last_message on conversations(last_message_at desc);
-  create index if not exists idx_messages_conversation_created on messages(conversation_id, created_at);
+  create unique index if not exists uq_open_conversation_per_sender on conversations(customer_id,whatsapp_account_id) where status='open';
+  create index if not exists idx_messages_conversation_created on messages(conversation_id,created_at);
   `);
 }
 
@@ -109,6 +108,6 @@ export async function chooseStickySender(customerId:string){
   `);
   const id=sender.rows[0]?.id;
   if(!id) throw new Error('No eligible WhatsApp sender available');
-  await pool.query('update customers set assigned_whatsapp_id=$1, updated_at=now() where id=$2',[id,customerId]);
+  await pool.query('update customers set assigned_whatsapp_id=$1,updated_at=now() where id=$2',[id,customerId]);
   return id as string;
 }
