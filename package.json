@@ -1,6 +1,6 @@
 {
   "name": "relayos",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,15 +14,18 @@
     "express": "latest",
     "lucide-react": "latest",
     "papaparse": "latest",
+    "pg": "^8.13.3",
     "react": "latest",
     "react-dom": "latest",
     "tsx": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/express": "latest",
     "@types/node": "latest",
     "@types/papaparse": "latest",
+    "@types/pg": "^8.11.11",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "typescript": "latest"
