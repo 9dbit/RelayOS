@@ -12,7 +12,7 @@
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "concurrently": "latest",
-    "express": "latest",
+    "express": "^4.21.2",
     "lucide-react": "latest",
     "papaparse": "latest",
     "pg": "^8.13.3",
@@ -23,7 +23,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@types/express": "latest",
+    "@types/express": "^5.0.0",
     "@types/node": "latest",
     "@types/papaparse": "latest",
     "@types/pg": "^8.11.11",
