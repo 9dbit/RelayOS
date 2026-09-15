@@ -16,11 +16,12 @@ const Account=z.object({name:z.string().min(2),phone:z.string(),phone_number_id:
 
 function dbReady(res:express.Response){if(!process.env.DATABASE_URL){res.status(503).json({error:'database_not_configured'});return false}return true}
 function bool(v:any){return v===true||['true','yes','1','y'].includes(String(v).toLowerCase())}
+function metaReady(){return Boolean(process.env.META_ACCESS_TOKEN&&process.env.META_GRAPH_VERSION)}
 
 app.get('/api/health',async(_req,res)=>{
   let database='not_configured';
   if(process.env.DATABASE_URL){try{await pool.query('select 1');database='connected'}catch{database='error'}}
-  res.status(database==='error'?503:200).json({ok:database!=='error',service:'RelayOS',database,timestamp:new Date().toISOString()});
+  res.status(database==='error'?503:200).json({ok:database!=='error',service:'RelayOS',database,meta:metaReady()?'configured':'not_configured',timestamp:new Date().toISOString()});
 });
 
 app.get('/api/v1/dashboard',async(_req,res)=>{
@@ -47,6 +48,53 @@ app.post('/api/v1/numbers',async(req,res)=>{
   const d=parsed.data;
   const q=await pool.query(`insert into whatsapp_accounts(name,phone,phone_number_id,waba_id,department,mode,status) values($1,$2,$3,$4,$5,$6,'setup') on conflict(phone) do update set name=excluded.name,phone_number_id=coalesce(excluded.phone_number_id,whatsapp_accounts.phone_number_id),waba_id=coalesce(excluded.waba_id,whatsapp_accounts.waba_id),department=excluded.department,mode=excluded.mode,updated_at=now() returning *`,[d.name,p,d.phone_number_id||null,d.waba_id||null,d.department||null,d.mode]);
   res.status(201).json(q.rows[0]);
+});
+
+async function getMetaIdentity(phoneNumberId:string){
+  if(!metaReady())throw new Error('meta_not_configured');
+  const fields='display_phone_number,verified_name,quality_rating,platform_type';
+  const r=await fetch(`https://graph.facebook.com/${process.env.META_GRAPH_VERSION}/${encodeURIComponent(phoneNumberId)}?fields=${encodeURIComponent(fields)}`,{headers:{authorization:`Bearer ${process.env.META_ACCESS_TOKEN}`}});
+  const data:any=await r.json();
+  if(!r.ok)throw new Error(data?.error?.message||`meta_http_${r.status}`);
+  return data;
+}
+
+app.post('/api/v1/numbers/:id/verify',async(req,res)=>{
+  if(!dbReady(res))return;
+  const q=await pool.query('select * from whatsapp_accounts where id=$1',[req.params.id]);
+  const account=q.rows[0];if(!account)return res.status(404).json({error:'account_not_found'});
+  if(!account.phone_number_id)return res.status(400).json({error:'phone_number_id_required'});
+  if(!metaReady())return res.status(503).json({error:'meta_not_configured'});
+  try{
+    const identity=await getMetaIdentity(account.phone_number_id);
+    await pool.query("update whatsapp_accounts set status='verified',health_score=greatest(health_score,80),updated_at=now() where id=$1",[account.id]);
+    res.json({ok:true,display_phone_number:identity.display_phone_number,verified_name:identity.verified_name,quality_rating:identity.quality_rating,platform_type:identity.platform_type});
+  }catch(e:any){
+    await pool.query("update whatsapp_accounts set status='setup',updated_at=now() where id=$1",[account.id]);
+    res.status(400).json({ok:false,error:e.message||'meta_verification_failed'});
+  }
+});
+
+app.post('/api/v1/numbers/:id/test',async(req,res)=>{
+  if(!dbReady(res))return;
+  const q=await pool.query('select * from whatsapp_accounts where id=$1',[req.params.id]);
+  const account=q.rows[0];if(!account)return res.status(404).json({error:'account_not_found'});
+  const checks={database:true,phone:Boolean(account.phone),phone_number_id:Boolean(account.phone_number_id),waba_id:Boolean(account.waba_id),meta_credentials:metaReady(),meta_identity:false};
+  if(checks.phone_number_id&&checks.meta_credentials){try{await getMetaIdentity(account.phone_number_id);checks.meta_identity=true}catch{checks.meta_identity=false}}
+  const ok=Object.values(checks).every(Boolean);
+  await pool.query('update whatsapp_accounts set health_score=$1,updated_at=now() where id=$2',[ok?95:Math.min(account.health_score||60,70),account.id]);
+  res.status(ok?200:400).json({ok,checks,error:ok?undefined:'channel_checks_failed'});
+});
+
+app.post('/api/v1/numbers/:id/activate',async(req,res)=>{
+  if(!dbReady(res))return;
+  const q=await pool.query('select * from whatsapp_accounts where id=$1',[req.params.id]);
+  const account=q.rows[0];if(!account)return res.status(404).json({error:'account_not_found'});
+  if(!account.phone_number_id||!account.waba_id)return res.status(400).json({error:'meta_identity_incomplete'});
+  if(!metaReady())return res.status(503).json({error:'meta_not_configured'});
+  try{await getMetaIdentity(account.phone_number_id)}catch(e:any){return res.status(400).json({error:e.message||'meta_verification_failed'})}
+  const updated=await pool.query("update whatsapp_accounts set status='active',health_score=100,updated_at=now() where id=$1 returning id,name,phone,phone_number_id,waba_id,department,mode,status,health_score",[account.id]);
+  res.json({ok:true,account:updated.rows[0]});
 });
 
 app.get('/api/v1/customers',async(req,res)=>{
@@ -105,7 +153,7 @@ app.post('/api/v1/conversations/:id/operator-reply',async(req,res)=>{
   const rewritten=await rewriteForCustomer({customerName:cv.customer_name,intent:cv.intent,operatorText:text,customerText:last.rows[0]?.original_text});
   const m=await pool.query(`insert into messages(conversation_id,direction,sender_type,original_text,rewritten_text,delivery_status) values($1,'outbound','operator',$2,$3,'queued') returning *`,[cv.id,text,rewritten]);
   let delivery:any={queued:false,reason:'phone_number_id_missing'};
-  if(cv.phone_number_id) delivery=await sendWhatsApp(cv.phone_number_id,cv.customer_phone,rewritten||text);
+  if(cv.phone_number_id)delivery=await sendWhatsApp(cv.phone_number_id,cv.customer_phone,rewritten||text);
   await pool.query("update messages set delivery_status=$1,metadata=$2 where id=$3",[delivery.queued?'sent':'draft',JSON.stringify(delivery),m.rows[0].id]);
   await pool.query('update conversations set last_message_at=now() where id=$1',[cv.id]);
   res.json({message:{...m.rows[0],rewritten_text:rewritten},delivery});
