@@ -26,9 +26,16 @@ export async function migrate(){
     mode text not null default 'hybrid',
     health_score int not null default 100 check(health_score between 0 and 100),
     status text not null default 'setup',
+    last_webhook_at timestamptz,
+    last_outbound_at timestamptz,
+    last_error text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
   );
+
+  alter table whatsapp_accounts add column if not exists last_webhook_at timestamptz;
+  alter table whatsapp_accounts add column if not exists last_outbound_at timestamptz;
+  alter table whatsapp_accounts add column if not exists last_error text;
 
   create table if not exists customers(
     id uuid primary key default gen_random_uuid(),
@@ -85,6 +92,22 @@ export async function migrate(){
   create unique index if not exists uq_open_conversation_per_sender on conversations(customer_id,whatsapp_account_id) where status='open';
   create index if not exists idx_messages_conversation_created on messages(conversation_id,created_at);
   `);
+
+  const phone=normalizePhone(process.env.RELAYOS_PRIMARY_PHONE||'');
+  const phoneNumberId=process.env.RELAYOS_PRIMARY_PHONE_NUMBER_ID;
+  const wabaId=process.env.RELAYOS_PRIMARY_WABA_ID;
+  if(phone&&phoneNumberId&&wabaId){
+    await pool.query(`
+      insert into whatsapp_accounts(name,phone,phone_number_id,waba_id,department,mode,status,health_score)
+      values($1,$2,$3,$4,$5,'hybrid','verifying',85)
+      on conflict(phone) do update set
+        name=excluded.name,
+        phone_number_id=excluded.phone_number_id,
+        waba_id=excluded.waba_id,
+        department=excluded.department,
+        updated_at=now()
+    `,[process.env.RELAYOS_PRIMARY_NAME||'Primary WhatsApp',phone,phoneNumberId,wabaId,process.env.RELAYOS_PRIMARY_DEPARTMENT||'Sales']);
+  }
 }
 
 export function normalizePhone(input:string){
