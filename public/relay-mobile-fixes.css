@@ -1,0 +1,59 @@
+/* RelayOS mobile polish: readable drawer navigation + strict viewport containment */
+@media(max-width:760px){
+  html,body{width:100%!important;max-width:100vw!important;overflow-x:hidden!important}
+  body *{min-width:0}
+  .relay-page-wrap,.relay-page-wrap>.shell,main{width:100%!important;max-width:100vw!important;overflow-x:hidden!important}
+
+  /* Mobile drawer */
+  .relay-global-sidebar,.sidebar{width:min(86vw,340px)!important;max-width:340px!important;overflow-y:auto!important;overflow-x:hidden!important}
+  .relay-global-sidebar .relay-menu{display:block!important;overflow:visible!important}
+  .relay-global-sidebar .relay-group{margin:14px 0!important}
+  .relay-global-sidebar .relay-label{display:block!important;font-size:8px!important;letter-spacing:.13em!important;color:#727680!important;padding:0 10px 6px!important}
+  .relay-global-sidebar .relay-link{display:flex!important;align-items:center!important;gap:11px!important;width:100%!important;min-height:42px!important;padding:9px 11px!important;font-size:12px!important;color:#b8bbc4!important;border-radius:12px!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+  .relay-global-sidebar .relay-link::before{content:none!important;display:none!important}
+  .relay-global-sidebar .relay-link .relay-nav-icon{flex:0 0 30px;width:30px;height:30px;border-radius:10px;background:#24262c;display:grid!important;place-items:center;color:#bfc3cc}
+  .relay-global-sidebar .relay-link .relay-nav-icon svg{width:15px!important;height:15px!important;max-width:none!important;stroke:currentColor;fill:none;stroke-width:1.8}
+  .relay-global-sidebar .relay-link .relay-nav-text{display:block!important;font-size:12px!important;line-height:1.25!important;letter-spacing:0!important}
+  .relay-global-sidebar .relay-link.active{background:#2a2c33!important;color:#fff!important}
+  .relay-global-sidebar .relay-link.active .relay-nav-icon{background:#6d55e8!important;color:#fff!important}
+  .relay-global-sidebar .relay-footer{display:block!important;padding:14px 10px 8px!important;font-size:9px!important}
+
+  /* React sidebar links if root app is open in drawer */
+  .sidebar nav button{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:11px!important;width:100%!important;min-height:42px!important;padding:9px 11px!important;font-size:12px!important}
+  .sidebar nav button span{display:block!important;flex:1!important}
+  .sidebar nav button svg{flex:0 0 18px!important;width:18px!important;height:18px!important}
+  .sidebar .relay-crm-shortcuts{display:block!important;max-height:none!important;overflow:visible!important}
+  .sidebar .relay-crm-shortcuts a{display:flex!important;align-items:center!important;gap:11px!important;width:100%!important;min-height:42px!important;padding:9px 11px!important;font-size:12px!important;white-space:normal!important}
+  .sidebar .relay-crm-shortcuts a::before{content:'•';width:30px;height:30px;flex:0 0 30px;border-radius:10px;background:#24262c;display:grid;place-items:center;color:#8f94a0;font-size:12px}
+
+  /* Global content containment */
+  .topbar,.section-head,.hero,.stats,.grid,.bodygrid,.number-grid,.agent-grid,.panel,.card,.number-card,.agent,.invite,.layout,.main{max-width:100%!important}
+  .topbar>*,.section-head>*,.hero>*,.panel>*,.card>*{max-width:100%!important}
+  input,select,textarea,button{max-width:100%}
+  pre,code,.chat p,.msg,.health-meta b,.table span{overflow-wrap:anywhere;word-break:break-word}
+
+  /* Inbox Wall mobile toolbar */
+  .iw-body{width:100%!important;max-width:100vw!important;overflow:hidden!important}
+  .iw-shell{width:100%!important;max-width:100vw!important;height:calc(100dvh - 58px)!important;overflow:hidden!important}
+  .iw-top{height:auto!important;min-height:116px!important;padding:14px 12px!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:'title title' 'search tools'!important;gap:10px!important;align-items:center!important;width:100%!important;max-width:100vw!important;overflow:hidden!important}
+  .iw-title{grid-area:title!important;min-width:0!important;width:100%!important}
+  .iw-title b{font-size:22px!important}
+  .iw-title small{display:block!important;white-space:normal!important;line-height:1.45!important}
+  .iw-search{grid-area:search!important;width:100%!important;min-width:0!important;height:40px!important}
+  .iw-tools{grid-area:tools!important;margin-left:0!important;display:flex!important;gap:6px!important;align-items:center!important;max-width:100%!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch;padding-bottom:2px!important;scrollbar-width:none}
+  .iw-tools::-webkit-scrollbar{display:none}
+  .iw-btn{flex:0 0 auto!important;height:40px!important;min-width:40px!important;padding:0 10px!important;font-size:10px!important}
+  .iw-zoom{flex:0 0 auto!important;min-width:45px!important;font-size:10px!important}
+  .iw-stage{width:100%!important;max-width:100vw!important;min-height:0!important;overflow:hidden!important}
+  .iw-canvas{padding:22px!important;gap:18px!important}
+  .iw-group{width:min(82vw,430px)!important;max-width:430px!important;padding:13px!important;border-radius:20px!important}
+  .iw-numbers{grid-template-columns:1fr!important;gap:10px!important}
+  .iw-number{min-height:220px!important;padding:11px!important}
+  .iw-legend{display:none!important}
+}
+
+@media(max-width:420px){
+  .iw-top{grid-template-columns:1fr!important;grid-template-areas:'title' 'search' 'tools'!important}
+  .iw-tools{width:100%!important;justify-content:flex-start!important}
+  .relay-global-sidebar,.sidebar{width:min(90vw,340px)!important}
+}
