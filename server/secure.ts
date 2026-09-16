@@ -4,6 +4,7 @@ import {spawn} from 'child_process';
 import {pool} from './db.js';
 
 const app=express();
+app.set('trust proxy',1);
 const publicPort=Number(process.env.PORT||3000);
 const internalPort=Number(process.env.RELAYOS_INTERNAL_PORT||3001);
 const secret=process.env.RELAYOS_JWT_SECRET||'';
@@ -34,7 +35,7 @@ function verifyJwt(token:string){
 }
 function cookies(req:express.Request){return Object.fromEntries(String(req.headers.cookie||'').split(';').map(v=>v.trim()).filter(Boolean).map(v=>{const i=v.indexOf('=');return[decodeURIComponent(v.slice(0,i)),decodeURIComponent(v.slice(i+1))]}))}
 async function scryptHash(password:string,salt=crypto.randomBytes(16).toString('hex')){return new Promise<string>((resolve,reject)=>crypto.scrypt(password,salt,64,(e,k)=>e?reject(e):resolve(`${salt}:${Buffer.from(k).toString('hex')}`)))}
-async function verifyPassword(password:string,stored:string){try{const[salt,hex]=stored.split(':');const fresh=await scryptHash(password,salt);return crypto.timingSafeEqual(Buffer.from(fresh),Buffer.from(stored))}catch{return false}}
+async function verifyPassword(password:string,stored:string){try{const[salt]=stored.split(':');const fresh=await scryptHash(password,salt);return crypto.timingSafeEqual(Buffer.from(fresh),Buffer.from(stored))}catch{return false}}
 function tokenHash(token:string){return crypto.createHash('sha256').update(token).digest('hex')}
 function setCookie(res:express.Response,token:string){res.setHeader('Set-Cookie',`${cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${sessionHours*3600}`)}
 function clearCookie(res:express.Response){res.setHeader('Set-Cookie',`${cookieName}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)}
@@ -82,7 +83,20 @@ async function currentUser(req:express.Request){
 }
 async function requireUser(req:express.Request,res:express.Response){const u=await currentUser(req);if(!u){if(req.path.startsWith('/api/'))res.status(401).json({error:'authentication_required'});else res.redirect('/login.html');return null}return u}
 function roleAtLeast(role:string,allowed:string[]){return allowed.includes(role)}
-function checkOrigin(req:express.Request,res:express.Response){if(['GET','HEAD','OPTIONS'].includes(req.method))return true;const origin=req.headers.origin;if(!origin)return true;const host=`${req.protocol}://${req.get('host')}`;if(origin!==host){res.status(403).json({error:'origin_rejected'});return false}return true}
+function externalOrigin(req:express.Request){
+  const proto=String(req.headers['x-forwarded-proto']||req.protocol||'https').split(',')[0].trim();
+  const host=String(req.headers['x-forwarded-host']||req.get('host')||'').split(',')[0].trim();
+  return `${proto}://${host}`;
+}
+function checkOrigin(req:express.Request,res:express.Response){
+  if(['GET','HEAD','OPTIONS'].includes(req.method))return true;
+  const origin=String(req.headers.origin||'').trim();
+  if(!origin)return true;
+  let incoming:string;try{incoming=new URL(origin).origin}catch{return res.status(403).json({error:'origin_rejected'}),false}
+  const expected=externalOrigin(req);
+  if(incoming!==expected){res.status(403).json({error:'origin_rejected'});return false}
+  return true;
+}
 
 app.get('/api/auth/me',async(req,res)=>{const u=await currentUser(req);if(!u)return res.status(401).json({error:'authentication_required'});res.json({user:u})});
 app.post('/api/auth/login',async(req,res)=>{
@@ -118,12 +132,12 @@ app.post('/api/auth/invites',async(req,res)=>{
   const raw=crypto.randomBytes(32).toString('base64url');
   await pool.query("update operator_invites set accepted_at=now() where operator_id=$1 and accepted_at is null",[op.rows[0].id]);
   await pool.query("insert into operator_invites(operator_id,token_hash,invited_by,expires_at) values($1,$2,$3,now()+interval '48 hours')",[op.rows[0].id,tokenHash(raw),actor.id]);
-  const base=`${req.protocol}://${req.get('host')}`;res.status(201).json({ok:true,operator:op.rows[0],invite_url:`${base}/invite.html?token=${encodeURIComponent(raw)}`,expires_in_hours:48});
+  const base=externalOrigin(req);res.status(201).json({ok:true,operator:op.rows[0],invite_url:`${base}/invite.html?token=${encodeURIComponent(raw)}`,expires_in_hours:48});
 });
 app.post('/api/auth/invites/accept',async(req,res)=>{
   if(!checkOrigin(req,res))return;const raw=String(req.body?.token||''),password=String(req.body?.password||'');if(password.length<10)return res.status(400).json({error:'password_min_10_chars'});
   const q=await pool.query(`select i.*,o.email,o.name from operator_invites i join operators o on o.id=i.operator_id where i.token_hash=$1 and i.accepted_at is null and i.expires_at>now()`,[tokenHash(raw)]);const inv=q.rows[0];if(!inv)return res.status(400).json({error:'invite_invalid_or_expired'});
-  const hash=await scryptHash(password);await pool.query('begin');try{await pool.query('update operators set password_hash=$1,accepted_at=now(),auth_version=auth_version+1 where id=$2',[hash,inv.operator_id]);await pool.query('update operator_invites set accepted_at=now() where id=$1',[inv.id]);await pool.query('commit')}catch(e){await pool.query('rollback');throw e}res.json({ok:true,email:inv.email,name:inv.name});
+  const hash=await scryptHash(password);const client=await pool.connect();try{await client.query('begin');await client.query('update operators set password_hash=$1,accepted_at=now(),auth_version=auth_version+1 where id=$2',[hash,inv.operator_id]);await client.query('update operator_invites set accepted_at=now() where id=$1',[inv.id]);await client.query('commit')}catch(e){await client.query('rollback');throw e}finally{client.release()}res.json({ok:true,email:inv.email,name:inv.name});
 });
 app.post('/api/auth/sessions/revoke-all',async(req,res)=>{if(!checkOrigin(req,res))return;const actor=await requireUser(req,res);if(!actor)return;await pool.query('update auth_sessions set revoked_at=now() where operator_id=$1 and revoked_at is null',[actor.id]);await pool.query('update operators set auth_version=auth_version+1 where id=$1',[actor.id]);clearCookie(res);res.json({ok:true})});
 
@@ -141,7 +155,7 @@ app.use(async(req,res)=>{
   if(!checkOrigin(req,res))return;
   const user=(req as any).relayosUser||await currentUser(req);
   const url=`http://127.0.0.1:${internalPort}${req.originalUrl}`;
-  const headers:any={};for(const[k,v]of Object.entries(req.headers)){if(v!==undefined&&!['host','content-length','cookie','x-relayos-operator-id'].includes(k))headers[k]=Array.isArray(v)?v.join(','):v;}
+  const headers:any={};for(const[k,v]of Object.entries(req.headers)){if(v!==undefined&&!['host','content-length','cookie','x-relayos-operator-id','x-forwarded-proto','x-forwarded-host'].includes(k))headers[k]=Array.isArray(v)?v.join(','):v;}
   if(user)headers['x-relayos-operator-id']=user.id;
   let body:any=undefined;if(!['GET','HEAD'].includes(req.method)&&req.body!==undefined){headers['content-type']='application/json';body=JSON.stringify(req.body)}
   try{const r=await fetch(url,{method:req.method,headers,body,redirect:'manual'});r.headers.forEach((v,k)=>{if(!['transfer-encoding','content-length','set-cookie'].includes(k.toLowerCase()))res.setHeader(k,v)});res.status(r.status);const buf=Buffer.from(await r.arrayBuffer());res.send(buf)}catch(e:any){res.status(502).json({error:'backend_unavailable',detail:e.message})}
