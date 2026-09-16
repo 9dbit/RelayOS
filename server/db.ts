@@ -32,7 +32,6 @@ export async function migrate(){
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
   );
-
   alter table whatsapp_accounts add column if not exists last_webhook_at timestamptz;
   alter table whatsapp_accounts add column if not exists last_outbound_at timestamptz;
   alter table whatsapp_accounts add column if not exists last_error text;
@@ -60,9 +59,23 @@ export async function migrate(){
     intent text,
     ai_mode text not null default 'hybrid',
     assigned_operator text,
+    unread_count int not null default 0,
+    priority text not null default 'normal',
+    escalation_status text not null default 'none',
+    escalation_reason text,
+    escalated_at timestamptz,
+    closed_at timestamptz,
+    last_read_at timestamptz,
     last_message_at timestamptz not null default now(),
     created_at timestamptz not null default now()
   );
+  alter table conversations add column if not exists unread_count int not null default 0;
+  alter table conversations add column if not exists priority text not null default 'normal';
+  alter table conversations add column if not exists escalation_status text not null default 'none';
+  alter table conversations add column if not exists escalation_reason text;
+  alter table conversations add column if not exists escalated_at timestamptz;
+  alter table conversations add column if not exists closed_at timestamptz;
+  alter table conversations add column if not exists last_read_at timestamptz;
 
   create table if not exists messages(
     id uuid primary key default gen_random_uuid(),
@@ -74,7 +87,32 @@ export async function migrate(){
     interpreted_text text,
     rewritten_text text,
     delivery_status text not null default 'received',
+    sent_at timestamptz,
+    delivered_at timestamptz,
+    read_at timestamptz,
+    failed_at timestamptz,
     metadata jsonb not null default '{}',
+    created_at timestamptz not null default now()
+  );
+  alter table messages add column if not exists sent_at timestamptz;
+  alter table messages add column if not exists delivered_at timestamptz;
+  alter table messages add column if not exists read_at timestamptz;
+  alter table messages add column if not exists failed_at timestamptz;
+
+  create table if not exists conversation_notes(
+    id uuid primary key default gen_random_uuid(),
+    conversation_id uuid not null references conversations(id) on delete cascade,
+    author text not null,
+    body text not null,
+    created_at timestamptz not null default now()
+  );
+
+  create table if not exists conversation_events(
+    id uuid primary key default gen_random_uuid(),
+    conversation_id uuid not null references conversations(id) on delete cascade,
+    event_type text not null,
+    actor text,
+    payload jsonb not null default '{}',
     created_at timestamptz not null default now()
   );
 
@@ -91,6 +129,9 @@ export async function migrate(){
   create index if not exists idx_conversations_last_message on conversations(last_message_at desc);
   create unique index if not exists uq_open_conversation_per_sender on conversations(customer_id,whatsapp_account_id) where status='open';
   create index if not exists idx_messages_conversation_created on messages(conversation_id,created_at);
+  create index if not exists idx_messages_external_status on messages(external_message_id,delivery_status);
+  create index if not exists idx_notes_conversation_created on conversation_notes(conversation_id,created_at desc);
+  create index if not exists idx_events_conversation_created on conversation_events(conversation_id,created_at desc);
   `);
 
   const phone=normalizePhone(process.env.RELAYOS_PRIMARY_PHONE||'');
