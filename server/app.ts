@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import {spawn} from 'child_process';
 import {pool} from './db.js';
 import {migrateKnowledge,registerKnowledgeRoutes} from './knowledge.js';
+import {migrateHybridRag,registerHybridRagRoutes} from './hybrid-rag.js';
 
 const app=express();
 app.set('trust proxy',1);
@@ -50,9 +51,9 @@ app.post('/api/auth/invites',async(req,res)=>{if(!checkOrigin(req,res))return;co
 app.post('/api/auth/invites/accept',async(req,res)=>{if(!checkOrigin(req,res))return;const raw=String(req.body?.token||''),password=String(req.body?.password||'');if(password.length<10)return res.status(400).json({error:'password_min_10_chars'});const q=await pool.query(`select i.*,o.email,o.name from operator_invites i join operators o on o.id=i.operator_id where i.token_hash=$1 and i.accepted_at is null and i.expires_at>now()`,[tokenHash(raw)]);const inv=q.rows[0];if(!inv)return res.status(400).json({error:'invite_invalid_or_expired'});const hash=await scryptHash(password);const c=await pool.connect();try{await c.query('begin');await c.query('update operators set password_hash=$1,accepted_at=now(),auth_version=auth_version+1 where id=$2',[hash,inv.operator_id]);await c.query('update operator_invites set accepted_at=now() where id=$1',[inv.id]);await c.query('commit')}catch(e){await c.query('rollback');throw e}finally{c.release()}res.json({ok:true,email:inv.email,name:inv.name})});
 app.post('/api/auth/sessions/revoke-all',async(req,res)=>{if(!checkOrigin(req,res))return;const a=await requireUser(req,res);if(!a)return;await pool.query('update auth_sessions set revoked_at=now() where operator_id=$1 and revoked_at is null',[a.id]);await pool.query('update operators set auth_version=auth_version+1 where id=$1',[a.id]);clearCookie(res);res.json({ok:true})});
 
-// Bind authenticated identity before governed knowledge routes.
 app.use('/api/v1/knowledge',async(req,res,next)=>{if(!checkOrigin(req,res))return;const u=await requireUser(req,res);if(!u)return;req.headers['x-relayos-operator-id']=String(u.id);next()});
 registerKnowledgeRoutes(app);
+registerHybridRagRoutes(app,{requireUser});
 
 const publicPaths=new Set(['/login.html','/invite.html','/setup-admin.html','/favicon.ico']);
 app.use(async(req,res,next)=>{if(req.path.startsWith('/api/auth/'))return next();if(req.path==='/api/health'||req.path.startsWith('/api/webhooks/meta'))return next();if(publicPaths.has(req.path))return next();const u=await requireUser(req,res);if(!u)return;if(req.path==='/onboarding.html'&&u.role!=='admin')return res.status(403).send('Admin access required');(req as any).relayosUser=u;next()});
@@ -60,6 +61,7 @@ app.use(async(req,res)=>{if(!checkOrigin(req,res))return;const u=(req as any).re
 
 await migrateAuth();
 await migrateKnowledge();
+await migrateHybridRag();
 const child=spawn(process.execPath,['--import','tsx','server/index.ts'],{stdio:'inherit',env:{...process.env,PORT:String(internalPort)}});
 child.on('exit',code=>{console.error('RelayOS internal backend exited',code);process.exit(code??1)});
-setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS secure gateway + knowledge runtime listening on ${publicPort}`)),500);
+setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS secure gateway + hybrid RAG listening on ${publicPort}`)),500);
