@@ -10,6 +10,7 @@ import {migrateContinuity,registerContinuityRoutes} from './continuity.js';
 import {migrateCommandCenter,registerCommandCenterRoutes} from './command-center.js';
 import {migrateWhatsappGroups,registerWhatsappGroupRoutes} from './whatsapp-groups.js';
 import {migrateCampaignEngine,registerCampaignRoutes} from './campaign-engine.js';
+import {migrateIntergroup,registerIntergroupRoutes,startIntergroupRunner} from './intergroup.js';
 
 const app=express();app.set('trust proxy',1);app.use(express.json({limit:'10mb'}));
 const publicPort=Number(process.env.PORT||3000),internalPort=Number(process.env.RELAYOS_INTERNAL_PORT||3001),secret=process.env.RELAYOS_JWT_SECRET||'',bootstrapToken=process.env.RELAYOS_BOOTSTRAP_TOKEN||'',cookieName='relayos_session',sessionHours=12;
@@ -38,12 +39,30 @@ app.post('/api/auth/invites/accept',async(req,res)=>{if(!checkOrigin(req,res))re
 app.post('/api/auth/sessions/revoke-all',async(req,res)=>{if(!checkOrigin(req,res))return;const a=await requireUser(req,res);if(!a)return;await pool.query('update auth_sessions set revoked_at=now() where operator_id=$1 and revoked_at is null',[a.id]);await pool.query('update operators set auth_version=auth_version+1 where id=$1',[a.id]);clearCookie(res);res.json({ok:true})});
 
 app.use('/api/v1/knowledge',async(req,res,next)=>{if(!checkOrigin(req,res))return;const u=await requireUser(req,res);if(!u)return;req.headers['x-relayos-operator-id']=String(u.id);next()});
-registerKnowledgeRoutes(app);registerHybridRagRoutes(app,{requireUser});registerCrmRoutes(app,{requireUser});registerCrmIntelligenceRoutes(app,{requireUser});registerContinuityRoutes(app,{requireUser});registerCommandCenterRoutes(app,{requireUser});registerWhatsappGroupRoutes(app,{requireUser});registerCampaignRoutes(app,{requireUser});
+registerKnowledgeRoutes(app);
+registerHybridRagRoutes(app,{requireUser});
+registerCrmRoutes(app,{requireUser});
+registerCrmIntelligenceRoutes(app,{requireUser});
+registerContinuityRoutes(app,{requireUser});
+registerIntergroupRoutes(app,{requireUser,checkOrigin,internalBaseUrl:`http://127.0.0.1:${internalPort}`});
+registerCommandCenterRoutes(app,{requireUser});
+registerWhatsappGroupRoutes(app,{requireUser});
+registerCampaignRoutes(app,{requireUser});
 
 const publicPaths=new Set(['/login.html','/invite.html','/setup-admin.html','/favicon.ico']);
 app.use(async(req,res,next)=>{if(req.path.startsWith('/api/auth/'))return next();if(req.path==='/api/health'||req.path.startsWith('/api/webhooks/meta'))return next();if(publicPaths.has(req.path))return next();const u=await requireUser(req,res);if(!u)return;if(req.path==='/onboarding.html'&&u.role!=='admin')return res.status(403).send('Admin access required');(req as any).relayosUser=u;next()});
 app.use(async(req,res)=>{if(!checkOrigin(req,res))return;const u=(req as any).relayosUser||await currentUser(req),url=`http://127.0.0.1:${internalPort}${req.originalUrl}`,headers:any={};for(const[k,v]of Object.entries(req.headers)){if(v!==undefined&&!['host','content-length','cookie','x-relayos-operator-id'].includes(k))headers[k]=Array.isArray(v)?v.join(','):v}if(u)headers['x-relayos-operator-id']=u.id;let body:any;if(!['GET','HEAD'].includes(req.method)&&req.body!==undefined){headers['content-type']='application/json';body=JSON.stringify(req.body)}try{const r=await fetch(url,{method:req.method,headers,body,redirect:'manual'});r.headers.forEach((v,k)=>{if(!['transfer-encoding','content-length','set-cookie'].includes(k.toLowerCase()))res.setHeader(k,v)});res.status(r.status).send(Buffer.from(await r.arrayBuffer()))}catch(e:any){res.status(502).json({error:'backend_unavailable',detail:e.message})}});
 
-await migrateAuth();await migrateKnowledge();await migrateHybridRag();await migrateCrm();await migrateCrmIntelligence();await migrateContinuity();await migrateCommandCenter();await migrateWhatsappGroups();await migrateCampaignEngine();
+await migrateAuth();
+await migrateKnowledge();
+await migrateHybridRag();
+await migrateCrm();
+await migrateCrmIntelligence();
+await migrateContinuity();
+await migrateCommandCenter();
+await migrateWhatsappGroups();
+await migrateCampaignEngine();
+await migrateIntergroup();
+startIntergroupRunner();
 const child=spawn(process.execPath,['--import','tsx','server/index.ts'],{stdio:'inherit',env:{...process.env,PORT:String(internalPort)}});child.on('exit',code=>{console.error('RelayOS internal backend exited',code);process.exit(code??1)});
-setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS AI CRM + campaigns + WhatsApp groups + continuity + command center listening on ${publicPort}`)),500);
+setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS AI CRM + campaigns + inter-group sandbox + WhatsApp groups + continuity + command center listening on ${publicPort}`)),500);
