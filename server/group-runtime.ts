@@ -1,5 +1,6 @@
 import type {Express,Request,Response} from 'express';
 import {pool} from './db.js';
+import {migrateOperatorRouting,registerOperatorRoutingRoutes} from './operator-routing.js';
 
 type User={id:string;name:string;role:string;department?:string};
 type Deps={requireUser:(req:Request,res:Response)=>Promise<User|null>};
@@ -40,12 +41,14 @@ export async function migrateGroupRuntime(){
     ) x
     where cv.group_id is null and cv.whatsapp_account_id=x.whatsapp_account_id;
   `);
+  await migrateOperatorRouting();
 }
 
 async function context(conversationId:string){
   const q=await pool.query(`
     select cv.id conversation_id,cv.group_id,g.group_code,g.name group_name,g.brand,g.department,g.region,g.routing_mode,g.min_health_score,
       wa.id whatsapp_account_id,wa.name whatsapp_name,wa.phone whatsapp_phone,
+      cv.assigned_operator_id,cv.assigned_operator,
       (select count(*)::int from whatsapp_group_knowledge gk where gk.group_id=cv.group_id) knowledge_count,
       (select count(*)::int from whatsapp_group_operators go join operators o on o.id=go.operator_id where go.group_id=cv.group_id and o.active=true) operator_count
     from conversations cv
@@ -57,6 +60,8 @@ async function context(conversationId:string){
 }
 
 export function registerGroupRuntimeRoutes(app:Express,deps:Deps){
+  registerOperatorRoutingRoutes(app,deps);
+
   app.get('/api/v1/group-runtime/status',async(req,res)=>{
     const u=await deps.requireUser(req,res);if(!u)return;
     const [total,grouped,ambiguous]=await Promise.all([
@@ -74,7 +79,7 @@ export function registerGroupRuntimeRoutes(app:Express,deps:Deps){
     if(!c.group_id)return res.json({...c,resolved:false,reason:'no_unambiguous_active_group_for_sender'});
     const [knowledge,operators]=await Promise.all([
       pool.query(`select ki.id,ki.title,ki.category,ki.authority_level,kv.version_no,kv.summary from whatsapp_group_knowledge gk join knowledge_items ki on ki.id=gk.knowledge_item_id join knowledge_versions kv on kv.id=ki.current_version_id where gk.group_id=$1 and ki.status='published' and kv.status='published' and (kv.effective_from is null or kv.effective_from<=now()) and (kv.expires_at is null or kv.expires_at>now()) order by ki.authority_level asc,ki.title`,[c.group_id]),
-      pool.query(`select o.id,o.name,o.role,o.department,o.presence,go.role group_role from whatsapp_group_operators go join operators o on o.id=go.operator_id where go.group_id=$1 and o.active=true order by go.role desc,o.presence='online' desc,o.name`,[c.group_id])
+      pool.query(`select o.id,o.name,o.role,o.department,o.presence,go.role group_role,(select count(*)::int from conversations cv where cv.assigned_operator_id=o.id and cv.status='open') open_load from whatsapp_group_operators go join operators o on o.id=go.operator_id where go.group_id=$1 and o.active=true order by case when go.role='lead' then 0 else 1 end,case o.presence when 'online' then 0 when 'away' then 1 else 2 end,open_load asc,o.name`,[c.group_id])
     ]);
     res.json({...c,resolved:true,knowledge:knowledge.rows,operators:operators.rows});
   });
