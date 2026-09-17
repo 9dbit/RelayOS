@@ -5,6 +5,14 @@ import {migrateOperatorRouting,registerOperatorRoutingRoutes} from './operator-r
 type User={id:string;name:string;role:string;department?:string};
 type Deps={requireUser:(req:Request,res:Response)=>Promise<User|null>};
 
+function normalizePhone(input:any){let p=String(input||'').replace(/\D/g,'');if(p.startsWith('0'))p='62'+p.slice(1);if(p.startsWith('8'))p='62'+p;return /^62\d{8,13}$/.test(p)?p:null}
+function digits(v:any){return String(v||'').replace(/\D/g,'')}
+async function configuredWabaId(){
+  if(process.env.RELAYOS_PRIMARY_WABA_ID)return process.env.RELAYOS_PRIMARY_WABA_ID;
+  const q=await pool.query("select waba_id from whatsapp_accounts where waba_id is not null and waba_id<>'' order by created_at limit 1");
+  return q.rows[0]?.waba_id||null;
+}
+
 export async function migrateGroupRuntime(){
   await pool.query(`
     alter table conversations add column if not exists group_id uuid references whatsapp_groups(id) on delete set null;
@@ -61,6 +69,39 @@ async function context(conversationId:string){
 
 export function registerGroupRuntimeRoutes(app:Express,deps:Deps){
   registerOperatorRoutingRoutes(app,deps);
+
+  app.post('/api/v1/meta/discover-number',async(req,res)=>{
+    const u=await deps.requireUser(req,res);if(!u)return;if(u.role!=='admin')return res.status(403).json({error:'admin_required'});
+    const phone=normalizePhone(req.body?.phone);if(!phone)return res.status(400).json({error:'invalid_phone'});
+    const accountId=String(req.body?.account_id||'').trim()||null;
+    const token=process.env.META_ACCESS_TOKEN,version=process.env.META_GRAPH_VERSION,wabaId=await configuredWabaId();
+    if(!token||!version)return res.status(503).json({error:'meta_transport_not_configured'});
+    if(!wabaId)return res.status(400).json({error:'waba_id_not_configured'});
+
+    const primaryPhone=normalizePhone(process.env.RELAYOS_PRIMARY_PHONE||'');
+    const primaryPhoneId=process.env.RELAYOS_PRIMARY_PHONE_NUMBER_ID||'';
+    if(primaryPhone&&phone===primaryPhone&&primaryPhoneId){
+      const q=accountId
+        ?await pool.query('update whatsapp_accounts set phone_number_id=$1,waba_id=$2,updated_at=now() where id=$3 returning *',[primaryPhoneId,wabaId,accountId])
+        :await pool.query('update whatsapp_accounts set phone_number_id=$1,waba_id=$2,updated_at=now() where phone=$3 returning *',[primaryPhoneId,wabaId,phone]);
+      return res.json({ok:true,source:'railway_primary_config',phone_number_id:primaryPhoneId,waba_id:wabaId,account:q.rows[0]||null});
+    }
+
+    try{
+      const fields='id,display_phone_number,verified_name,quality_rating';
+      const url=`https://graph.facebook.com/${encodeURIComponent(version)}/${encodeURIComponent(wabaId)}/phone_numbers?fields=${encodeURIComponent(fields)}&limit=100`;
+      const r=await fetch(url,{headers:{authorization:`Bearer ${token}`}});
+      const data:any=await r.json();
+      if(!r.ok)return res.status(400).json({error:'meta_phone_discovery_failed',detail:data?.error?.message||`meta_http_${r.status}`});
+      const list=Array.isArray(data?.data)?data.data:[];
+      const match=list.find((x:any)=>digits(x.display_phone_number)===phone||digits(x.display_phone_number).endsWith(phone)||phone.endsWith(digits(x.display_phone_number)));
+      if(!match)return res.status(404).json({error:'phone_not_found_in_configured_waba',waba_configured:true,available_count:list.length});
+      const q=accountId
+        ?await pool.query('update whatsapp_accounts set phone_number_id=$1,waba_id=$2,updated_at=now() where id=$3 returning *',[String(match.id),wabaId,accountId])
+        :await pool.query('update whatsapp_accounts set phone_number_id=$1,waba_id=$2,updated_at=now() where phone=$3 returning *',[String(match.id),wabaId,phone]);
+      res.json({ok:true,source:'meta_waba_phone_numbers',phone_number_id:String(match.id),waba_id:wabaId,display_phone_number:match.display_phone_number,verified_name:match.verified_name,quality_rating:match.quality_rating,account:q.rows[0]||null});
+    }catch(e:any){res.status(500).json({error:'meta_phone_discovery_error',detail:e.message})}
+  });
 
   app.get('/api/v1/group-runtime/status',async(req,res)=>{
     const u=await deps.requireUser(req,res);if(!u)return;
