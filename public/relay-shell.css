@@ -1,5 +1,5 @@
 @view-transition{navigation:auto}
-:root{--relay-shell-sidebar:224px;--relay-shell-command:390px;--relay-shell-bg:#f5f6f8;--relay-shell-card:#fff;--relay-shell-line:#e7e8ec;--relay-shell-ink:#17181d;--relay-shell-muted:#858993;--relay-shell-radius:22px;--relay-shell-page-pad:26px;--relay-shell-max:1440px}
+:root{--relay-shell-sidebar:224px;--relay-shell-command:390px;--relay-shell-bg:#f5f6f8;--relay-shell-card:#fff;--relay-shell-line:#e7e8ec;--relay-shell-ink:#17181d;--relay-shell-muted:#858993;--relay-shell-radius:22px;--relay-shell-page-pad:16px;--relay-shell-max:1440px}
 *{box-sizing:border-box}
 html{background:var(--relay-shell-bg);scroll-behavior:smooth;max-width:100%;overflow-x:hidden}
 body{background:var(--relay-shell-bg)!important;color:var(--relay-shell-ink);text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;overflow-x:hidden;max-width:100%;min-width:0}
@@ -170,7 +170,7 @@ body.relay-navigating{cursor:progress}
  body.relay-static-app>.relay-global-sidebar{grid-column:1!important;grid-row:1!important}
  body.relay-static-app>.relay-page-wrap{grid-column:2!important;grid-row:1!important;margin-left:0!important;width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;padding-left:0!important}
  body.relay-static-app.relay-command-open>.relay-page-wrap{margin-left:0!important;padding-left:390px!important;width:100%!important;max-width:100%!important}
- body.relay-static-app>.relay-page-wrap>.shell{width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;padding:26px!important;overflow:hidden!important}
+ body.relay-static-app>.relay-page-wrap>.shell{width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;padding:16px!important;overflow:hidden!important}
  body.relay-static-app>.relay-page-wrap>.shell>.main,body.relay-static-app>.relay-page-wrap>.shell>main,body.relay-static-app>.relay-page-wrap .main{margin-left:0!important;width:100%!important;max-width:100%!important;min-width:0!important;padding-left:0!important;padding-right:0!important;overflow:hidden!important}
  body.relay-static-app>.relay-page-wrap .grid,body.relay-static-app>.relay-page-wrap .bodygrid,body.relay-static-app>.relay-page-wrap .stats,body.relay-static-app>.relay-page-wrap .layout,body.relay-static-app>.relay-page-wrap .iw-shell{width:100%!important;max-width:100%!important;min-width:0!important}
  body.relay-static-app>.relay-page-wrap .grid>*,body.relay-static-app>.relay-page-wrap .bodygrid>*,body.relay-static-app>.relay-page-wrap .stats>*,body.relay-static-app>.relay-page-wrap .layout>*{min-width:0!important;max-width:100%!important}
