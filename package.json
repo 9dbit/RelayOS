@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
     "build": "vite build && node server/inject-nav.mjs",
-    "start": "tsx server/app.ts"
+    "start": "tsx server/openai-smoke.ts && tsx server/app.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
