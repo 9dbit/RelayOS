@@ -163,3 +163,21 @@ body.relay-navigating{cursor:progress}
 }
 @media(max-width:340px){.stats{grid-template-columns:1fr!important}.relay-mobile-bar .rmb-brand span{display:none}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}}
+
+/* FINAL STATIC DESKTOP SHELL */
+@media(min-width:1361px){
+ body.relay-static-app{grid-template-columns:224px minmax(0,1fr)!important;width:100vw!important;max-width:100vw!important;overflow:hidden!important}
+ body.relay-static-app>.relay-global-sidebar{grid-column:1!important;grid-row:1!important}
+ body.relay-static-app>.relay-page-wrap{grid-column:2!important;grid-row:1!important;margin-left:0!important;width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;padding-left:0!important}
+ body.relay-static-app.relay-command-open>.relay-page-wrap{margin-left:0!important;padding-left:390px!important;width:100%!important;max-width:100%!important}
+ body.relay-static-app>.relay-page-wrap>.shell{width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;padding:26px!important;overflow:hidden!important}
+ body.relay-static-app>.relay-page-wrap>.shell>.main,body.relay-static-app>.relay-page-wrap>.shell>main,body.relay-static-app>.relay-page-wrap .main{margin-left:0!important;width:100%!important;max-width:100%!important;min-width:0!important;padding-left:0!important;padding-right:0!important;overflow:hidden!important}
+ body.relay-static-app>.relay-page-wrap .grid,body.relay-static-app>.relay-page-wrap .bodygrid,body.relay-static-app>.relay-page-wrap .stats,body.relay-static-app>.relay-page-wrap .layout,body.relay-static-app>.relay-page-wrap .iw-shell{width:100%!important;max-width:100%!important;min-width:0!important}
+ body.relay-static-app>.relay-page-wrap .grid>*,body.relay-static-app>.relay-page-wrap .bodygrid>*,body.relay-static-app>.relay-page-wrap .stats>*,body.relay-static-app>.relay-page-wrap .layout>*{min-width:0!important;max-width:100%!important}
+ body.relay-static-app>.relay-page-wrap input,body.relay-static-app>.relay-page-wrap select,body.relay-static-app>.relay-page-wrap textarea{max-width:100%!important;min-width:0!important}
+ body.relay-static-app #relayCommandCenter{left:224px!important;width:390px!important}
+}
+body.relay-static-app.relay-command-open .relay-page-wrap{margin-left:0!important}
+body.relay-static-app.relay-command-open .shell>main{margin-left:0!important}
+body.relay-static-app .relay-page-wrap main{margin-left:0!important}
+html,body{max-width:100vw!important;overflow-x:hidden!important}
