@@ -13,7 +13,7 @@ export async function migrateGroupRuntime(){
     declare resolved uuid;
     begin
       if new.group_id is not null or new.whatsapp_account_id is null then return new; end if;
-      select min(gm.group_id)
+      select min(gm.group_id::text)::uuid
         into resolved
       from whatsapp_group_members gm
       join whatsapp_groups g on g.id=gm.group_id and g.status='active'
@@ -32,7 +32,7 @@ export async function migrateGroupRuntime(){
     update conversations cv
     set group_id=x.group_id
     from (
-      select gm.whatsapp_account_id,min(gm.group_id) group_id
+      select gm.whatsapp_account_id,min(gm.group_id::text)::uuid group_id
       from whatsapp_group_members gm
       join whatsapp_groups g on g.id=gm.group_id and g.status='active'
       group by gm.whatsapp_account_id
@@ -81,7 +81,7 @@ export function registerGroupRuntimeRoutes(app:Express,deps:Deps){
 
   app.post('/api/v1/group-runtime/reconcile',async(req,res)=>{
     const u=await deps.requireUser(req,res);if(!u)return;if(!['admin','supervisor'].includes(u.role))return res.status(403).json({error:'forbidden'});
-    const r=await pool.query(`update conversations cv set group_id=x.group_id from (select gm.whatsapp_account_id,min(gm.group_id) group_id from whatsapp_group_members gm join whatsapp_groups g on g.id=gm.group_id and g.status='active' group by gm.whatsapp_account_id having count(*)=1)x where cv.group_id is null and cv.whatsapp_account_id=x.whatsapp_account_id returning cv.id`);
+    const r=await pool.query(`update conversations cv set group_id=x.group_id from (select gm.whatsapp_account_id,min(gm.group_id::text)::uuid group_id from whatsapp_group_members gm join whatsapp_groups g on g.id=gm.group_id and g.status='active' group by gm.whatsapp_account_id having count(*)=1)x where cv.group_id is null and cv.whatsapp_account_id=x.whatsapp_account_id returning cv.id`);
     res.json({ok:true,updated:r.rowCount||0});
   });
 }
