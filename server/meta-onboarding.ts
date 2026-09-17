@@ -1,0 +1,90 @@
+import type {Express,Request,Response} from 'express';
+import {pool,normalizePhone} from './db.js';
+
+type User={id:string;name:string;role:string;department?:string};
+type Deps={requireUser:(req:Request,res:Response)=>Promise<User|null>;checkOrigin:(req:Request,res:Response)=>boolean};
+
+type MetaPhone={id:string;display_phone_number?:string;verified_name?:string;quality_rating?:string;code_verification_status?:string;platform_type?:string};
+
+function metaConfig(){
+  return {
+    token:String(process.env.META_ACCESS_TOKEN||'').trim(),
+    version:String(process.env.META_GRAPH_VERSION||'').trim(),
+    defaultWabaId:String(process.env.RELAYOS_PRIMARY_WABA_ID||'').trim(),
+    primaryPhone:normalizePhone(process.env.RELAYOS_PRIMARY_PHONE||''),
+    primaryPhoneNumberId:String(process.env.RELAYOS_PRIMARY_PHONE_NUMBER_ID||'').trim(),
+  };
+}
+
+async function requireAdmin(req:Request,res:Response,deps:Deps){
+  const u=await deps.requireUser(req,res);if(!u)return null;
+  if(u.role!=='admin'){res.status(403).json({error:'admin_required'});return null;}
+  return u;
+}
+
+async function listMetaPhones(wabaId:string){
+  const {token,version}=metaConfig();
+  if(!token||!version)throw new Error('meta_credentials_not_configured');
+  let url=`https://graph.facebook.com/${encodeURIComponent(version)}/${encodeURIComponent(wabaId)}/phone_numbers?fields=${encodeURIComponent('id,display_phone_number,verified_name,quality_rating,code_verification_status,platform_type')}&limit=100`;
+  const out:MetaPhone[]=[];
+  for(let page=0;page<5&&url;page++){
+    const r=await fetch(url,{headers:{authorization:`Bearer ${token}`}});
+    const data:any=await r.json().catch(()=>({}));
+    if(!r.ok){const msg=data?.error?.message||`meta_http_${r.status}`;const err:any=new Error(msg);err.status=r.status;throw err;}
+    if(Array.isArray(data?.data))out.push(...data.data);
+    url=typeof data?.paging?.next==='string'?data.paging.next:'';
+  }
+  return out;
+}
+
+export function registerMetaOnboardingRoutes(app:Express,deps:Deps){
+  app.get('/api/v1/meta-onboarding/config',async(req,res)=>{
+    const u=await requireAdmin(req,res,deps);if(!u)return;
+    const c=metaConfig();
+    res.json({configured:Boolean(c.token&&c.version&&c.defaultWabaId),default_waba_configured:Boolean(c.defaultWabaId),primary_identity_configured:Boolean(c.primaryPhone&&c.primaryPhoneNumberId),graph_version:c.version||null});
+  });
+
+  app.post('/api/v1/numbers/:id/discover-meta',async(req,res)=>{
+    if(!deps.checkOrigin(req,res))return;
+    const u=await requireAdmin(req,res,deps);if(!u)return;
+    const q=await pool.query('select * from whatsapp_accounts where id=$1',[req.params.id]);
+    const account=q.rows[0];if(!account)return res.status(404).json({error:'account_not_found'});
+    const c=metaConfig();
+    const wabaId=String(req.body?.waba_id||account.waba_id||c.defaultWabaId||'').trim();
+    if(!wabaId)return res.status(400).json({error:'default_waba_not_configured',detail:'Configure RELAYOS_PRIMARY_WABA_ID in Railway or provide a WABA ID for this account.'});
+
+    const accountPhone=normalizePhone(account.phone||'');
+    if(!accountPhone)return res.status(400).json({error:'invalid_account_phone'});
+
+    try{
+      let match:MetaPhone|undefined;
+      if(c.primaryPhone&&c.primaryPhoneNumberId&&accountPhone===c.primaryPhone){
+        match={id:c.primaryPhoneNumberId,display_phone_number:account.phone};
+      }else{
+        const phones=await listMetaPhones(wabaId);
+        match=phones.find(p=>normalizePhone(p.display_phone_number||'')===accountPhone);
+        if(!match){
+          const masked=phones.map(p=>{const n=normalizePhone(p.display_phone_number||'');return n?`••••${n.slice(-4)}`:'unknown'});
+          return res.status(404).json({error:'phone_not_found_in_waba',detail:'The number is not registered under the configured WhatsApp Business Account.',waba_id:wabaId,registered_count:phones.length,registered_numbers_masked:masked});
+        }
+      }
+
+      const updated=(await pool.query(`update whatsapp_accounts set phone_number_id=$2,waba_id=$3,status=case when status='setup' then 'verifying' else status end,last_error=null,updated_at=now() where id=$1 returning *`,[account.id,match.id,wabaId])).rows[0];
+      res.json({ok:true,source:accountPhone===c.primaryPhone?'railway_primary':'meta_discovery',account:updated,meta:{id:match.id,display_phone_number:match.display_phone_number||account.phone,verified_name:match.verified_name||null,quality_rating:match.quality_rating||null,code_verification_status:match.code_verification_status||null,platform_type:match.platform_type||null}});
+    }catch(e:any){
+      await pool.query('update whatsapp_accounts set last_error=$2,updated_at=now() where id=$1',[account.id,String(e?.message||'meta_discovery_failed')]).catch(()=>{});
+      res.status(e?.status===401||e?.status===403?502:400).json({error:'meta_discovery_failed',detail:String(e?.message||'Unable to discover Meta sender identity.')});
+    }
+  });
+
+  app.patch('/api/v1/numbers/:id/meta-identity',async(req,res)=>{
+    if(!deps.checkOrigin(req,res))return;
+    const u=await requireAdmin(req,res,deps);if(!u)return;
+    const phoneNumberId=String(req.body?.phone_number_id||'').trim();
+    const wabaId=String(req.body?.waba_id||metaConfig().defaultWabaId||'').trim();
+    if(!phoneNumberId||!wabaId)return res.status(400).json({error:'phone_number_id_and_waba_id_required'});
+    const q=await pool.query(`update whatsapp_accounts set phone_number_id=$2,waba_id=$3,status=case when status='setup' then 'verifying' else status end,last_error=null,updated_at=now() where id=$1 returning *`,[req.params.id,phoneNumberId,wabaId]);
+    if(!q.rowCount)return res.status(404).json({error:'account_not_found'});
+    res.json({ok:true,account:q.rows[0]});
+  });
+}
