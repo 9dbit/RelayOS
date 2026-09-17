@@ -51,7 +51,26 @@ body.relay-navigating .relay-page-wrap,body.relay-navigating main{opacity:.72;tr
 body.relay-navigating{cursor:progress}
 .relay-mobile-bar{display:none}
 .relay-mobile-backdrop{display:none}
-@media(max-width:1360px){#relayCommandCenter{transform:translateX(calc(-1 * (var(--relay-shell-command) - 42px)))}#relayCommandCenter.open-mobile{transform:none}.relay-command-open .shell>main{margin-left:var(--relay-shell-sidebar)!important}.relay-command-open .relay-page-wrap{margin-left:0!important}}
+
+/* Desktop right-workspace containment */
+@media(min-width:1361px){
+ body.relay-static-app.relay-command-open .relay-page-wrap{margin-left:var(--relay-shell-command)!important;width:calc(100% - var(--relay-shell-command))!important;max-width:calc(100% - var(--relay-shell-command))!important}
+ body.relay-command-open:not(.relay-static-app) .shell>main{margin-left:calc(var(--relay-shell-sidebar) + var(--relay-shell-command))!important;width:calc(100% - var(--relay-shell-sidebar) - var(--relay-shell-command))!important;max-width:calc(100% - var(--relay-shell-sidebar) - var(--relay-shell-command))!important}
+ .relay-command-open .relay-page-wrap>.shell,.relay-command-open .relay-page-wrap .main,.relay-command-open .relay-page-wrap>.shell>main{width:100%!important;max-width:100%!important;min-width:0!important}
+}
+.relay-page-wrap,.relay-page-wrap>.shell,.relay-page-wrap .main,.relay-page-wrap .layout,.relay-page-wrap .grid,.relay-page-wrap .bodygrid,.relay-page-wrap .stats,.relay-page-wrap .number-grid,.relay-page-wrap .agent-grid,.relay-page-wrap .invitegrid,main,main>section,main>div{min-width:0;max-width:100%}
+.relay-page-wrap .layout,.relay-page-wrap .grid,.relay-page-wrap .bodygrid,.relay-page-wrap .stats,.relay-page-wrap .number-grid,.relay-page-wrap .agent-grid,.relay-page-wrap .invitegrid{width:100%}
+.relay-page-wrap .layout>*,.relay-page-wrap .grid>*,.relay-page-wrap .bodygrid>*,.relay-page-wrap .stats>*,.relay-page-wrap .number-grid>*,.relay-page-wrap .agent-grid>*,.relay-page-wrap .invitegrid>*,main .grid>*,main .bodygrid>*,main .stats>*{min-width:0;max-width:100%}
+.relay-page-wrap input,.relay-page-wrap select,.relay-page-wrap textarea,main input,main select,main textarea{max-width:100%;min-width:0}
+.relay-page-wrap table,main table{max-width:100%}
+.relay-page-wrap pre,.relay-page-wrap code,main pre,main code{max-width:100%;overflow-wrap:anywhere}
+@media(min-width:761px) and (max-width:1700px){
+ .relay-command-open .relay-page-wrap .grid,.relay-command-open .relay-page-wrap .bodygrid,.relay-command-open main .grid,.relay-command-open main .bodygrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))!important}
+ .relay-command-open .relay-page-wrap .stats,.relay-command-open main .stats{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))!important}
+ .relay-command-open .relay-page-wrap .layout{grid-template-columns:minmax(180px,220px) minmax(0,1fr)!important}
+}
+
+@media(max-width:1360px){#relayCommandCenter{transform:translateX(calc(-1 * (var(--relay-shell-command) - 42px)))}#relayCommandCenter.open-mobile{transform:none}.relay-command-open .shell>main{margin-left:var(--relay-shell-sidebar)!important}.relay-command-open .relay-page-wrap{margin-left:0!important;width:auto!important;max-width:100%!important}}
 @media(max-width:1100px){:root{--relay-shell-sidebar:76px;--relay-shell-page-pad:18px}.sidebar .brand span,.sidebar .workspace span,.sidebar nav button span,.relay-crm-shortcuts{display:none!important}.sidebar nav button{justify-content:center;padding:0!important;height:38px}.sidebar nav button svg{width:17px!important;height:17px!important}.sidebar .brand{justify-content:center;padding-left:0!important;padding-right:0!important}.sidebar .workspace{justify-content:center;padding:10px!important}.relay-command-open .shell>main{margin-left:var(--relay-shell-sidebar)!important}.number-grid,.agent-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.inbox-shell{grid-template-columns:230px minmax(0,1fr)!important}.inbox-shell>.customer{display:none!important}}
 @media(max-width:760px){
  :root{--relay-shell-sidebar:0px;--relay-shell-page-pad:14px;--relay-shell-radius:18px}
