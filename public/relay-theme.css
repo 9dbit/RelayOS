@@ -49,5 +49,12 @@ html[data-theme="dark"] .iw-legend{background:rgba(13,16,19,.97)!important;borde
 html[data-theme="dark"] .iw-legend b{color:#f4f6f7!important}
 html[data-theme="dark"] .badge,html[data-theme="dark"] .role,html[data-theme="dark"] .eyebrow{color:#befc4f!important}
 html[data-theme="dark"] .badge{background:#1c2512!important;border-color:#2c3722!important}
-@media(max-width:760px){.sidebar,.relay-global-sidebar{width:min(74vw,286px)!important}.relay-theme-toggle{margin:10px 0 4px}.relay-unified-brand{margin-bottom:14px!important}.relay-workspace{margin-bottom:12px!important}}
-@media(max-width:390px){.sidebar,.relay-global-sidebar{width:min(76vw,272px)!important}}
+/* RelayOS brand wordmark */
+.relay-unified-brand,.rmb-brand,.sidebar .brand{position:relative!important;display:flex!important;align-items:center!important;min-height:42px!important}
+.relay-unified-brand>* ,.rmb-brand>* ,.sidebar .brand>*{visibility:hidden!important;position:absolute!important;pointer-events:none!important}
+.relay-unified-brand::before,.rmb-brand::before,.sidebar .brand::before{content:"";display:block;background:url('/relayos-logo-light.svg') left center/contain no-repeat;width:154px;height:38px;flex:0 0 auto}
+html[data-theme="dark"] .relay-unified-brand::before,html[data-theme="dark"] .rmb-brand::before,html[data-theme="dark"] .sidebar .brand::before{background-image:url('/relayos-logo-dark.svg')}
+.rmb-brand::before{width:150px;height:36px}
+.sidebar .brand::before{width:156px;height:40px}
+@media(max-width:760px){.sidebar,.relay-global-sidebar{width:min(74vw,286px)!important}.relay-theme-toggle{margin:10px 0 4px}.relay-unified-brand{margin-bottom:14px!important}.relay-workspace{margin-bottom:12px!important}.rmb-brand::before{width:145px;height:34px}.relay-unified-brand::before,.sidebar .brand::before{width:148px;height:36px}}
+@media(max-width:390px){.sidebar,.relay-global-sidebar{width:min(76vw,272px)!important}.rmb-brand::before{width:136px;height:32px}}
