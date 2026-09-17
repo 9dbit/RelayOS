@@ -12,6 +12,7 @@ import {migrateWhatsappGroups,registerWhatsappGroupRoutes} from './whatsapp-grou
 import {migrateCampaignEngine,registerCampaignRoutes} from './campaign-engine.js';
 import {migrateIntergroup,registerIntergroupRoutes,startIntergroupRunner} from './intergroup.js';
 import {migrateRealAgentLoop,registerRealAgentRoutes} from './real-agent-loop.js';
+import {migrateGroupRuntime,registerGroupRuntimeRoutes} from './group-runtime.js';
 
 const app=express();app.set('trust proxy',1);app.use(express.json({limit:'10mb'}));
 const publicPort=Number(process.env.PORT||3000),internalPort=Number(process.env.RELAYOS_INTERNAL_PORT||3001),secret=process.env.RELAYOS_JWT_SECRET||'',bootstrapToken=process.env.RELAYOS_BOOTSTRAP_TOKEN||'',cookieName='relayos_session',sessionHours=12;
@@ -49,6 +50,7 @@ registerRealAgentRoutes(app,{requireUser,checkOrigin});
 registerIntergroupRoutes(app,{requireUser,checkOrigin,internalBaseUrl:`http://127.0.0.1:${internalPort}`});
 registerCommandCenterRoutes(app,{requireUser});
 registerWhatsappGroupRoutes(app,{requireUser});
+registerGroupRuntimeRoutes(app,{requireUser});
 registerCampaignRoutes(app,{requireUser});
 
 const publicPaths=new Set(['/login.html','/invite.html','/setup-admin.html','/favicon.ico']);
@@ -63,9 +65,10 @@ await migrateCrmIntelligence();
 await migrateContinuity();
 await migrateCommandCenter();
 await migrateWhatsappGroups();
+await migrateGroupRuntime();
 await migrateCampaignEngine();
 await migrateRealAgentLoop();
 await migrateIntergroup();
 startIntergroupRunner();
 const child=spawn(process.execPath,['--import','tsx','server/index.ts'],{stdio:'inherit',env:{...process.env,PORT:String(internalPort)}});child.on('exit',code=>{console.error('RelayOS internal backend exited',code);process.exit(code??1)});
-setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS AI CRM + campaigns + real agent loop + inter-group sandbox + WhatsApp groups + continuity + command center listening on ${publicPort}`)),500);
+setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS AI CRM + sticky group runtime + campaigns + real agent loop + inter-group sandbox + WhatsApp groups + continuity + command center listening on ${publicPort}`)),500);
