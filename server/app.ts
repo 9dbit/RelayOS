@@ -14,6 +14,7 @@ import {migrateIntergroup,registerIntergroupRoutes,startIntergroupRunner} from '
 import {migrateRealAgentLoop,registerRealAgentRoutes} from './real-agent-loop.js';
 import {migrateGroupRuntime,registerGroupRuntimeRoutes} from './group-runtime.js';
 import {registerGroupRagRoutes} from './group-rag.js';
+import {registerGroupContinuityRoutes} from './group-continuity.js';
 
 const app=express();app.set('trust proxy',1);app.use(express.json({limit:'10mb'}));
 const publicPort=Number(process.env.PORT||3000),internalPort=Number(process.env.RELAYOS_INTERNAL_PORT||3001),secret=process.env.RELAYOS_JWT_SECRET||'',bootstrapToken=process.env.RELAYOS_BOOTSTRAP_TOKEN||'',cookieName='relayos_session',sessionHours=12;
@@ -47,6 +48,7 @@ registerHybridRagRoutes(app,{requireUser});
 registerGroupRagRoutes(app,{requireUser});
 registerCrmRoutes(app,{requireUser});
 registerCrmIntelligenceRoutes(app,{requireUser});
+registerGroupContinuityRoutes(app,{requireUser});
 registerContinuityRoutes(app,{requireUser});
 registerRealAgentRoutes(app,{requireUser,checkOrigin});
 registerIntergroupRoutes(app,{requireUser,checkOrigin,internalBaseUrl:`http://127.0.0.1:${internalPort}`});
@@ -73,4 +75,4 @@ await migrateRealAgentLoop();
 await migrateIntergroup();
 startIntergroupRunner();
 const child=spawn(process.execPath,['--import','tsx','server/index.ts'],{stdio:'inherit',env:{...process.env,PORT:String(internalPort)}});child.on('exit',code=>{console.error('RelayOS internal backend exited',code);process.exit(code??1)});
-setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS AI CRM + sticky group runtime + group-aware RAG + campaigns + real agent loop + inter-group sandbox + WhatsApp groups + continuity + command center listening on ${publicPort}`)),500);
+setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS AI CRM + sticky group runtime + same-group continuity + group-aware RAG + campaigns + real agent loop + inter-group sandbox + WhatsApp groups + command center listening on ${publicPort}`)),500);
