@@ -13,6 +13,7 @@ import {migrateCampaignEngine,registerCampaignRoutes} from './campaign-engine.js
 import {migrateIntergroup,registerIntergroupRoutes,startIntergroupRunner} from './intergroup.js';
 import {migrateRealAgentLoop,registerRealAgentRoutes} from './real-agent-loop.js';
 import {migrateGroupRuntime,registerGroupRuntimeRoutes} from './group-runtime.js';
+import {registerGroupRagRoutes} from './group-rag.js';
 
 const app=express();app.set('trust proxy',1);app.use(express.json({limit:'10mb'}));
 const publicPort=Number(process.env.PORT||3000),internalPort=Number(process.env.RELAYOS_INTERNAL_PORT||3001),secret=process.env.RELAYOS_JWT_SECRET||'',bootstrapToken=process.env.RELAYOS_BOOTSTRAP_TOKEN||'',cookieName='relayos_session',sessionHours=12;
@@ -43,6 +44,7 @@ app.post('/api/auth/sessions/revoke-all',async(req,res)=>{if(!checkOrigin(req,re
 app.use('/api/v1/knowledge',async(req,res,next)=>{if(!checkOrigin(req,res))return;const u=await requireUser(req,res);if(!u)return;req.headers['x-relayos-operator-id']=String(u.id);next()});
 registerKnowledgeRoutes(app);
 registerHybridRagRoutes(app,{requireUser});
+registerGroupRagRoutes(app,{requireUser});
 registerCrmRoutes(app,{requireUser});
 registerCrmIntelligenceRoutes(app,{requireUser});
 registerContinuityRoutes(app,{requireUser});
@@ -71,4 +73,4 @@ await migrateRealAgentLoop();
 await migrateIntergroup();
 startIntergroupRunner();
 const child=spawn(process.execPath,['--import','tsx','server/index.ts'],{stdio:'inherit',env:{...process.env,PORT:String(internalPort)}});child.on('exit',code=>{console.error('RelayOS internal backend exited',code);process.exit(code??1)});
-setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS AI CRM + sticky group runtime + campaigns + real agent loop + inter-group sandbox + WhatsApp groups + continuity + command center listening on ${publicPort}`)),500);
+setTimeout(()=>app.listen(publicPort,()=>console.log(`RelayOS AI CRM + sticky group runtime + group-aware RAG + campaigns + real agent loop + inter-group sandbox + WhatsApp groups + continuity + command center listening on ${publicPort}`)),500);
