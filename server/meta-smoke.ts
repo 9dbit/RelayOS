@@ -2,6 +2,19 @@ import {pool,normalizePhone} from './db.js';
 
 type MetaPhone={id:string;display_phone_number?:string;verified_name?:string;quality_rating?:string};
 
+function metaErrorSummary(status:number,data:any){
+  const e=data?.error||{};
+  const parts=[
+    `http=${status}`,
+    e.type?`type=${String(e.type)}`:'',
+    e.code!=null?`code=${String(e.code)}`:'',
+    e.error_subcode!=null?`subcode=${String(e.error_subcode)}`:'',
+    e.message?`message=${String(e.message)}`:'',
+    e.fbtrace_id?`trace=${String(e.fbtrace_id)}`:''
+  ].filter(Boolean);
+  return parts.join(' ');
+}
+
 async function run(){
   const token=String(process.env.META_ACCESS_TOKEN||'').trim();
   const version=String(process.env.META_GRAPH_VERSION||'').trim();
@@ -16,7 +29,7 @@ async function run(){
     const url=`https://graph.facebook.com/${encodeURIComponent(version)}/${encodeURIComponent(wabaId)}/phone_numbers?fields=${encodeURIComponent('id,display_phone_number,verified_name,quality_rating')}&limit=100`;
     const r=await fetch(url,{headers:{authorization:`Bearer ${token}`}});
     const data:any=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(`Meta HTTP ${r.status}: ${data?.error?.message||'unknown error'}`);
+    if(!r.ok)throw new Error(`Meta Graph rejected WABA phone discovery: ${metaErrorSummary(r.status,data)}`);
     const phones:MetaPhone[]=Array.isArray(data?.data)?data.data:[];
     const match=phones.find(p=>normalizePhone(p.display_phone_number||'')===primaryPhone);
     if(!match)throw new Error(`primary phone not present in configured WABA; discovered=${phones.length}`);
